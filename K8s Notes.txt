@@ -435,3 +435,5 @@ to describe daemonset
 kubectl describe daemonset daemonsetname
 
 Need to write about Static Pods and Multiple Schedulers 
+
+END now 
