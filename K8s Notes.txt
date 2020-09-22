@@ -1,0 +1,437 @@
+Architecture 
+
+Control Plane - Who Controls complete Containers and controls indivudual Worker Nodes 
+Kube Control Manager - Manages the underlying components such as Node Control Manager, REplication Control Manger etc.
+Etcd- MAnages complete information of K8s like which nodes has what Containers when it is loaded etc 
+Kube-Scheduler - Knows to which node the container should be deployed on basing on resource ,policy contrainints 
+Kube-api server - Which enables communication between each components within ControlPlane
+
+Worker Nodes - Whoe does the work , We can think like who does the job like NetApp Cdot Nodes 
+Kubectl - Which acts like a captain to the worker node and updates all the information to Control plane whenever Control Plane's Kube-apiserbver requests for it or kubectl itself updates the info periodically
+Kube-proxy - which is used to have communication between worker node services 
+Control Runtime Engine - Dockers is necessary to run containers on  workers nodes 
+
+ETCD 
+
+A DB which stores information in KVs 
+which is highly available within the K8s 
+run the following command to get the Etcd info (kubectl get pods -n kube-system)
+Stores the information in   root directory /registrations folder for each  apiservices (pods,replicasets,config etc..,)
+We've 2 ETCD Versions available v2(by deafult) and v3, We need to set the version of ETCDCTL before using ETCD both v2 and v3 commands work in different ways hence using one version commands differ in another version 
+ETCDCTL is the CLI tool used to interact with ETCD
+To set the right version of API set the environment variable ETCDCTL_API command
+export ETCDCTL_API=3 
+We also need to set cert's to use ETCD in HA 
+for ex:- 
+kubectl exec etcd-master -n kube-system -- sh -c "ETCDCTL_API=3 etcdctl get / --prefix --keys-only --limit=10 --cacert /etc/kubernetes/pki/etcd/ca.crt --cert /etc/kubernetes/pki/etcd/server.crt  --key /etc/kubernetes/pki/etcd/server.key" 
+
+Kube-api Server 
+The Kube-api server is responsible for all the commnications within k8s. Lets say if we use kubectl commands 
+kubeapi interacts with etcd and get back the info back to the console 
+Lets say when we want to create a new pod this is what happens in backend 
+1. Kubeapi server enrolls that the new pod info needs to be created in ETCD and acks back the user
+2. Kube -Scheduler constantly monitors the Kube-api and came to know that new pod need to be created and then 
+checks which wokrers node it better suits and update the info to kube-api ,
+3. kube-api then updates the worker node to etcd and then contacts the kubelet to create the pod
+4. Kublet contacts the container Runtime engine to create the image in the docker containers 
+5. once its created then the kubelet updates the info back to kube-api 
+6. kubeapi updates the info to etcd of the newly created pod infomration.
+
+Command: kubectl get pods -n kube-system
+
+Kube Controller Manager (KCM)
+
+Which Manages all the measures with in K8s, Lets say Node Controller and Replication Controller 
+KCM mainly do 2 things -> Watch Status and Remediate Situation 
+few of the default settings as follows 
+Node Monitor Period = 5s 
+Node Monitor Grace PEriod = 40s 
+POD Eviction timeout  = 5m
+Node Controller constantly monitors the Node status by communicating with Kube API-server
+Replication Controller constantly monitors the Nodes and ensures the nodes will be running all the time 
+We have many Contollers in KCM such as Deployment Controller, CronJob, Job Controller, NameSpace Controller, Statefulset etc..,
+
+Command: kubectl get pods -n kube-system 
+
+Kube Scheduler 
+Mainly decides which container needs to deployed on which worker node 
+it mainly depends on the resource calucaulation such as Filter Nodes, Rank Nodes etc.., 
+
+Kubelet 
+Acts as captain on the worker node and frequently tracks the status of the node and reports to the Kube-apiserver about the changes within the node.
+Main job is to 
+Register node Create Pods ,Monitor Node and Pods  
+
+Kube-Proxy 
+
+It is used to communincate with each pods within the K8s, whenever any service is created then Kube-proxy create an entry to that service in eahc Pod IP table so that the pod can be communicated with the new service.
+
+Pods YAML File Desciption
+Any YAML file mainly consists 4 keywords
+ApiVersion - Depending on the Kind the Version changes
+Kind - Kinds like Pod, Deployment, ReplicaSet, Services 
+Metadata - Metadata has linked with name and labels and in labels you can label any Key/Value Pairs 
+  Name 
+  Label 
+    app:
+    type:
+
+Spec - Declares Container infomration. 
+  containers 
+    - name: 
+      image:
+
+To deploy pods from Yaml file use the following Command 
+kubectl create -f file.yaml
+Kubectl get Pods - To get list of Pods 
+Kubectl describe pod podname -> To get Complete details of any pod
+
+
+ReplicaSet (RS)/ReplicaContainers(RC) 
+
+Both RS and RC were same However the RC is old concept and now RS is in place to maintain K8s Replication Clusters 
+Now What is the difference between 2 
+apiVersion: v1 for RC
+apiVersion: apps/v1 for RS 
+for RC and RS both have same contents except RS has "selector" field where we can mention which label the current RS file appliable  
+Due to this, We can use same RS to existing Pods as well and easy to handle 
+ 
+Namespaces
+
+Its nothing but environments, We can create Pods in each Namespaces as per the requirement. Lets say dev,UAT,PRe-Prod, Prod etc
+By default, we've default Namespace to create all the Pods.
+
+We need to mention the NameSpace if we want to create in specific namespace apart from default one 
+if we want to create all time in same namespace then we have to set the namespace permanently to the same one like below
+kubectl  config set-context  $(kubectl config current-context) --namespace=dev
+If we want to access any service from different namespace use as following
+db-service.dev.svc.cluster.local
+db-service - Service Name 
+dev- Namespace
+svc- stands for Service 
+cluster.local - domain 
+To create pod in specific namespace in YAML
+
+apiVersion: v1 
+kind: Namespace
+metadata: 
+  name: dev
+
+if direct by command 
+kubectl create namespace dev
+To get Pods from a specific namespace
+kubectl get pods --namespace=dev
+We can set Quota resource utilization for a specific namespace as follwoing 
+
+apiVersion: v1
+kind: ResourceQuota 
+metadata:
+  name: compute-Quota
+  namespace: dev
+spec:
+  hard:
+    pods: "10"
+    requests.cpu: "4"
+    requests.memory: 5Gi
+    limits.cpu: "10"
+    limits.memory: 10Gi
+run the above file as "kubectl create -f abovefile.yaml"
+
+Deployments:
+
+With the use of deployment, We can upgrade/downgrade versions more easy such as Rolling upgrade and can revert if some issue happens 
+during upgrade, we can pause the deployments pods and do our scale/any amendments to the services and resume it once done so that all are on same page 
+
+Deployment is looks more like Replicaset yaml file except the change is in kind: Deployment and apiVersion: apps/v1
+
+Once Deployment file is create run kubectl create yourfile.yaml 
+which creates the Replicasets and pods can be checked using the following commands 
+"kubectl get all" --> Which displays all the deployment,Replicasets,Pods info 
+
+Services 
+
+3 Types of Ports available in K8s
+NodePort - To use the internal Pod's port to the outside world via Nodes Port 
+  In NP, 3 Ports plays a main role the 1st one is Pods Port which is the TargetPort 
+  2nd one is Service Port Which is ClusterIPs Port 
+  3rd One is Nodes Port Which ranges from 30000 - 32767
+  The 2nd one ServicePort is mandatory when declaring services , rest both will take the values as follows 
+  TargetPort is by default same as Service Port 
+  and Nodes Port will be select within the range(30000-32767) whichever is free
+
+  Declaring YAML is pretty similar to Deployment/ReplicaSets definition except use as follows 
+
+  apiVersion: v1
+  kind: Service
+  metadata:  
+    name: myapp-service 
+    labels:
+      app: front-end
+      type: front-service 
+  spec:
+    type: NodePort
+    ports:
+      -  targetPort: 80
+         port: 80
+         nodePort: 30006
+    selector:
+      app: front-end
+      type: front-service     
+
+We need to declare the pods from the metadata labels to the selector in spec to specify which ports the Pods applicable to 
+kubectl create -f yourfile.yaml
+kubectl get services
+curl http://192.168.0.102:30006
+If Muliple similar pods within same Node are mentioned with same label then Servie will be create automatically on all those labels which we mentioned under selector and the incoming requests can route to any of the pods using random algorithm and affinity as yes 
+If different pods span on different nodes then also service will b created automatically across nodes and same port can b used across nodes 
+
+ClusterIP - To communicate between group of Pods, We'll be need of this IP
+
+To access from front-end to backe-end whenever  required we dont use the IPs of the PODs as the PODS life is unexpected hence we use ClusterIP to add the similar pods under 1 roof so that if any service want to connet we use clusterIP so that the PODs dependency will be minimized 
+
+In yaml file, After declaring CLusterIP we need to porvide the metadata information in selector Spec 
+apiVersion: v1
+kind: Service 
+metadata: 
+  name: backend
+
+spec:
+  type: ClusterIP
+  ports: 
+    -  targetPort: 80
+       port: 80
+  selector:    ->>> The following info pulled from Pods Label info..
+    app: myapp
+    type: backend     
+
+Load Balancer - To balance the load in the Cloud from front-end/back-end/
+Loadbalancer will be useful to balance the load from the incoming requests, Lets say 2 nodes has 2 pods then we'll have 2 IPs where user can access to 
+so We need to create Loadbalancer, So that the IP is same but the backend connected pods depends on the LB selection 
+We'll explore Loadbalancer later in coming sessions.
+If possible, Go through the types of Ports more details to understand better 
+
+Imperative vs Declarative Commands 
+
+Use Imperative commands whenever the requirement is small to medium 
+USe Declarative Commands whenever the requirement is complex such as Multi container env.
+
+Imperative Commands 
+Create 
+Kubectl run --image=nginx nginx
+kubectl create deployment --image=nginx nginx
+kubectl expose deployment nginx --port 80
+
+update
+kubectl edit deployment nginx  -> The problem with this command is it drectly edits the K8s internal yaml files not your local host file hence you use this command only when you are not referring your local file for any amendments.
+kubectl scale deployment nginx --replicas=5
+kubectl set image deployment nginx nginx=nginx:1.18
+
+Delete/replace/
+kubectl delete -f yourfile.yaml
+kubectl replace -f yourfile.yaml
+
+
+Declarative Commands 
+
+The Declarative command is simple and straight forward, We create the yaml and run 
+kubectl apply -f yourfile.yaml
+
+Update 
+for any updates, change the yaml file and then run the same above command the K8s will ensure that the pod needs to be updated which alraedy running now 
+kubectl apply -f yourfile.yaml
+
+How Kubectl apply works 
+
+When we run kubectl apply ,K8s internall file will creae a json converted file with the kubectl file for the first time and then for any updates the local file is compared with K8s internal file 
+and the ncheck with internal json file to ensure what all the things were changed the json file path is mentioned in the internal file itself as annotations so that json has all the fields and keep on changing as 
+per the local file from user.
+
+Manual Scheduling 
+
+While declaring Pod definition in spec section mention nodeSelector: nodeName to mention which node the Pod needs to be created, If its not created then Kube-Scheduler will create the Pod in the available nodes.
+Hence the nodeSelector will be automatically created in Pod file once the file got executed.
+
+Labels and Selectors 
+
+Under metadata column the labels will need to be mentioned, Every ReplicaSet, Service, Deployment, Pods the labels can be created and the labels can be used for selectors under spec section 
+ For Ex:- ReplicaSet file has 2 labels section the first one at the top is denotes the ReplicaSet labels. The labels section under template will denotes the label of Pods and the selector matchingLabels under spec will point the corresponding labels of Pods to match the replicasets here the labels at top is not useful However it wil be used
+ to point the other objects.
+
+Taints & Tolerations
+Taints were applied on Nodes while Tolerations were applied on Pods. By default Pods only tolerate first while assigning to nodes.
+Lets say we have Pod1(tolerated to blue),Pod2 and Node1 and Node2(tainted to blue)
+Now when we assign Pod1 to Node2 -> the Node2 accepts Pod1 as its tolerated to blue 
+However its not gaurantee that Node1 also tries to dploy as the Node1 is not tainted it also accepts Pod1 deployment 
+Pod2 cant be placed in Node2 as it is tainted to blue and Pod2 is not tolerated the same 
+If you want to restrict that Pod1 need to place in node2 only not to any other than we need to use NodeAffinity
+
+Taints and Tolerations has 3 options
+NoExecute: It wont allow new ones into the tained node and incase any existing then the those pods which are not tolerated will be evicted (dead)
+NoSchedule: It wont Schedule any Pods which are not tolerated as similar to Node 
+PreferNoSchedule: It'll try not to Schedule but no gaurantee 
+
+To taint a Node 
+kubectl taint nodes node-name key=value:options
+ex:- kubectl taint nodes node1 app=blue:NoExecute
+
+To tolerate a Pod in yaml spec section add the tolerations section as follows
+
+spec:
+  tolerations:
+  -  key: "app"
+     operator: "Equals"
+     value: "blue"
+     effect: "NoExecute"
+
+Tip: When we observe that apart from nodes we also have master node, However no Pods will assign to master node because by default it has tainted to not allocate any pods to it 
+as the master node isdesigned to hold internal objects. But we can change it and deploys our pods into master node incase we need but its not good practise.
+We can see that setting by using the following command 
+kubectl describe node kubemaster | grep Taint
+Outptut : Taints node-role.kubernetes.io/master:NoSchedule
+
+NodeSelectors:
+
+To restrict Pods to specific nodes, We need to specify a tag to node and mention the same tag for Pod as well so tht  while selecting a node at pod deployment then it ensures that node should be same tag 
+
+At node
+kubectl label nodes nodename key:value 
+Ex: - kubectl label nodes node01 size:Large
+
+At Pod definition in YAML file 
+under main spec section 
+spec:
+  nodeSelector:
+    size: Large 
+
+There a small Problem here, Lets i need to use the Pod should not use small ones and the Pods should deploy either in medium or Large nodes , these conditions cant be satisfied in NodeSelectors as it doesnt contain OR,AND,NOT conditions 
+Here the NodeAffinity comes in to satisy this requirement
+
+NodeAffinity
+
+This NodeAffinity ensures that the Pods can be placed at right node at scheduling the spec section needs to be mentiond NodeAffinity
+
+spec:
+  affinity:
+    NodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: size
+          operator: In
+          values:
+          - Large
+
+The Value exisits can also be used, that will ensure that the exists nodes which are tagged can only considered , if no one is tagged then it ignores 
+
+requiredDuringSchedulingIgnoredDuringExecution  It ensures that the Pod deployment is required during scheduling however it dont effects the existing ones which are already places in the node.
+preferredDuringSchedulingIgnoredDuringExecution  It ensures that the Pod deployment is not gauranteed but it tries it best to satisy the given conditions 
+PLANNING -> requiredDuringSchedulingRequiredDuringExecution It ensures that Pod scheduling and Executuion were striclty followed as per the condition, incase any existing then the Pods will be evicted.
+
+
+Typical Deployment YAML File 
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: nginx
+  labels:
+    color: blue
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      color: blue
+  template:
+    metadata:
+      labels:
+        color: blue
+    spec:    
+      containers:
+      - image: nginx
+        name: nginx
+
+
+Using Alone NodeAffinity or Taints & Tolerations will not completely restrict the Pods deployment to the respective nodes, Hence using both of them can greatly strict the Pod deployment to the nodes.
+
+
+Resource Requests and Resource Limits 
+
+RRs were nothing but whenever any POD is created the K8s will provide bydefault 0.5CPU and 256Mi Memory and the same can be extended in Pod definition file under spec section 
+spec:
+  requests:
+    memory: 1Gi 
+    cpu: 1 
+
+RSs were nothing but the max limit where the underlying resource can extend upto the CPU cannot be extended once the limit exceeds however the Memory can be extends the limit but eventually the POD will be evicted 
+   bydefault the RSs for CPU is1vCPU and memory to 512Mi However can be extended under spec as follows
+spec: 
+  limits:
+    memory: 2Gi
+    cpu: 2
+
+Note that Gi -> 1000mb and Gb -> 1024mb same i and b applicable to all the measures such as Mb and Mi etc..
+
+When a pod is created the containers are assigned a default CPU request of .5 and memory of 256Mi". For the POD to pick up those defaults you must have first set those as default values for request and limit by creating a LimitRange in that namespace
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mem-limit-range
+spec:
+  limits:
+  - default:
+      memory: 512Mi
+    defaultRequest:
+      memory: 256Mi
+    type: Container
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-limit-range
+spec:
+  limits:
+  - default:
+      cpu: 1
+    defaultRequest:
+      cpu: 0.5
+    type: Container
+
+A quick note on editing PODs and Deployments
+
+Edit a POD
+Remember, you CANNOT edit specifications of an existing POD other than the below.
+spec.containers[*].image
+spec.initContainers[*].image
+spec.activeDeadlineSeconds
+spec.tolerations
+
+For example you cannot edit the environment variables, service accounts, resource limits (all of which we will discuss later) of a running pod. But if you really want to, you have 2 options:
+
+1. Run the kubectl edit pod <pod name> command.  This will open the pod specification in an editor (vi editor). Then edit the required properties. When you try to save it, you will be denied. This is because you are attempting to edit a field on the pod that is not editable.
+   A copy of the file with your changes is saved in a temporary location /tmp/filename.
+   You can then delete the existing pod by running the command: kubectl delete pod webapp
+   Then create a new pod with your changes using the temporary file using command: kubectl create -f /tmp/kubectl-edit-ccvrq.yaml
+2. The second option is to extract the pod definition in YAML format to a file using the command: kubectl get pod webapp -o yaml > my-new-pod.yaml
+   Then make the changes to the exported file using an editor (vi editor). Save the changes
+   vi my-new-pod.yaml
+   Then delete the existing pod using command: kubectl delete pod webapp
+   Then create a new pod with the edited file  using command: kubectl create -f my-new-pod.yaml
+
+Edit Deployments
+  With Deployments you can easily edit any field/property of the POD template. Since the pod template is a child of the deployment specification,  with every change the deployment will automatically delete and create a new pod with the new changes. So if you are asked to edit a property of a POD part of a deployment you may do that simply by running the command
+  kubectl edit deployment my-deployment    
+
+DaemonSets:
+
+DS is actually make sures that each pod will be created in each node and when the nodes expires automatically the DaemonSet Pod also will be evicted 
+The best use case is for Monitoring/Log viewer pod on each node.
+
+K8s use case is kube-proxy is acts like a daemonset and it is present on each node so that all the pods can communicate internally with the help of daemonsets.
+
+creating daemonset is similar to Replicaset definition file only we have to change the kind to DaemonSet
+To get daemonsets 
+Kubectl get daemonsets
+to describe daemonset 
+kubectl describe daemonset daemonsetname
+
+Need to write about Static Pods and Multiple Schedulers 
