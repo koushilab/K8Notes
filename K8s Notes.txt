@@ -3,10 +3,10 @@ Architecture
 Control Plane - Who Controls complete Containers and controls indivudual Worker Nodes 
 Kube Control Manager - Manages the underlying components such as Node Control Manager, REplication Control Manger etc.
 Etcd- MAnages complete information of K8s like which nodes has what Containers when it is loaded etc 
-Kube-Scheduler - Knows to which node the container should be deployed on basing on resource ,policy contrainints 
+Kube-Scheduler - Knows to which node the container should be deployed on basing on resource ,policy constraints 
 Kube-api server - Which enables communication between each components within ControlPlane
 
-Worker Nodes - Whoe does the work , We can think like who does the job like NetApp Cdot Nodes 
+Worker Nodes - Who does the work , We can think like who does the job like NetApp Cdot Nodes 
 Kubectl - Which acts like a captain to the worker node and updates all the information to Control plane whenever Control Plane's Kube-apiserbver requests for it or kubectl itself updates the info periodically
 Kube-proxy - which is used to have communication between worker node services 
 Control Runtime Engine - Dockers is necessary to run containers on  workers nodes 
@@ -436,4 +436,102 @@ kubectl describe daemonset daemonsetname
 
 Need to write about Static Pods and Multiple Schedulers 
 
-END now 
+K8s Monitoring is not properly setup till now Other Alternative options were 
+Metrics Server 
+Prometheus
+Elastic Stack
+DataDog
+Dynatrace
+
+If Minikube installed, We can enable metrics-server and track all the metics of K8s
+minikube addons enable metrics-server 
+run the following commands 
+kubectl top nodes 
+kubectl top pod 
+
+
+Rolling Updates and Rollbacks 
+
+Deployments Upgrades will takes place in 2 Ways 
+1. Strategic Upgrades - Complete down the existing and replace with upgraded ones 
+   Issue - Application needs to face downtime till the latest pods available
+2. Rolling Upgrades(by default) - Upgrades/Down the existing Pods will takes place at same time Hence no downtime to any thing.
+
+To update the exisitng Version for Pods, Modify the exisiting Pods definition file and modify the version of the image under containers and then run "Kubectl apply -f filename.yaml" command 
+or We can also directly update the image version using the command "kubectl set image deployment/my-app-deployment nginx=nginx:1.9.1" -> The issue with this command is this the deployment file will be in different version which will be Out of Sync with Pods version.
+
+REVISION - Every update to the deployment will be versioned hence we can track which revision points to what update.
+
+Create -> kubectl create -f filename.yaml
+Get -> kubectl get deployments 
+Update -> kubectl set and kubectl apply as state above 
+status -> kubectl  rollout status deployment/my-app-deployment
+History -> kubectl rollout history deployment/my-app-deployment
+rollback -> kubectl rollout undo deployment/my-app-deployment
+
+
+Commands and Arguments 
+In Docker world, When we run docker run imagename -> the docker starts and end immediately as the mentioned default cmd in dockerfile is not trigerred while running the docker we can refer dockerfile from dockers 
+ for ex:- for mysql it is mysqld for nginx it is nginx for linux it is bash (here bash is not a service its a bash program ) 
+ To intiate this we use CMD ["sleep", "10" ] so everytime the linux machine starts and wait for 10sec then automatically expires after it 
+ Lets say we need to add the number of sec at runtime then we need to use ENTRYPOINT ["sleep"] , So that we can mention like docker run docker run ubuntu-sleeper 15 now the sleep will be add by ENTRYPOINT if we dont mention anything then ENTRYPOINT and CMD will be combined and wait for 10 seconds 
+ We can edit the ENTRYPOINT values at runtime like docker run --entrypoint sleep2.0 ubuntu-sleeper 10 (Now the ENTRYPOINT sleep will update to sleep2.0)
+
+ Now the same can be done in K8s world in definition file under spec section 
+ containers:
+   -  name: ubuntu-sleeper
+      image: ubuntu-sleeper
+      command: ["sleep2.0"]   ------>>>> similar to Docker ENTRYPOINT
+      args:["10"]             ------>>>> similar to Docker CMD 
+
+ENV Variables in K8s
+In Docker , We use docker -e APP_COLOR=pink dockername 
+In K8s, in definition file unde specs section we mention ENV as follows 
+spec:
+  env:   -->> PLAIN Name:Value EnvsNote env is a list, We can add envs as many as needed  
+  -  name:
+     value:        
+
+  env:    ---> When we refer from configuration Key Reference File which we use to store all the envs and refer to the Pods 
+  -  name: APP_COLOR
+     valueFrom: 
+       configMapKeyRef    
+
+  env:    ----> when refering withe secrets 
+  -  name: APP_COLOR 
+     valueFrom:
+       secretKeyRef     
+
+ConfigMaps 
+
+Imperative Approach 
+
+kubectl create configMap <config-name> --from-literal=<key>=<value>
+Ex:- 
+kubectl create configMap \
+   app-config --from-literal=APP_COLOR=blue \
+              --from-literal=APP_MOD=prod
+
+kubectl create configMap <config-name> --from-file=<path-to-file>
+Ex:-
+kubectl create configMap --from-file=app_config.properties
+
+Declarative Approach
+
+config-map.yaml
+apiVersion: v1
+kind: configMap
+metadata: 
+  name: app-config
+data:
+  APP_COLOR: blue
+  APP_MOD: prod
+
+Now add the above file to our Pod definition file under spec section 
+  spec:
+    envFrom:
+    - ConfigMapRef:
+        name: app-config 
+
+Need to write about Secret Config Ref , MultiContainers concepts 
+Done for now.        
