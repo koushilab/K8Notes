@@ -535,3 +535,101 @@ Now add the above file to our Pod definition file under spec section
 
 Need to write about Secret Config Ref , MultiContainers concepts 
 Done for now.        
+
+K8s Cluster -> What it will do when a node is not responding. it allow by deaful 5mins to make sure the node will be back , if not then automatically all the node will be evicted and all the Pods were dead 
+If the Pod has replicas then those Pods will be create in another nodes what if the Pod doesnt have replicas then the Pod will be inaccessible to the user as it is no more
+To check the Eviction timeout of the node Cmd -> 
+kube-control-manager --pod-eviction-timeout=5m0s
+When a node needs to take off for some maintainance then we need to in the node so that the Pods which were n that node will be recreated on th e another nodes and then the Pod will be restricted to create any Pods 
+then once you take off the node and do the necessary changes and then make it uncorden to accept the new Pods however the Pods which were recreated during drain will not recreate they still serve from their nodes.
+We can also corden the nodes so that the Pods which were exists will serve the data and the nw Pods will not be created on it 
+ Commands for drain/corden/uncorden as follows : -
+ kubectl drain nodename 
+ kubectl cordon nodename 
+ kubectl uncordon nodename 
+
+Cluster Upgrade Process 
+
+When we want to upgrade the Cluster and Worker first we want to upgrade cluster followed with Worker Nodes 
+in Cluster , the Kube-apiserver should be the highest version and the upgrade should be followed with 1 subversion only means 1.12 to 1.13 not directly from 1.12 to 1.14
+
+We can upgrde the cluster in muliple ways depending on your exisiting setup like using GKE or kubeadm or K8s-the hardway setup 
+
+Lets see what are the restrictions for underlying components.
+Kube-apiserver always at higher version (X)
+controller Manager + kube scheduler (X or X-1)
+kubelet + Kube-proxy (X or X-2)
+
+However Kubectl can be high or Equals or lower 1 version than Kube-apiserver 
+Kubectl(X+1 or  X or X-1)
+
+When to upgrade -> K8s will support only last 3 versions Hence if we lagging more than 2 versions better to upgrade asap so that we are on safer side 
+
+While upgrading Cluster 
+All the management functions will be halt, We cant access master cluster However rest all the worker nodes will not be impacted 
+Once  the cluster is upgraded , still we can see the version point to Old one till we upgrade 
+
+Upgrading cluster using Kubeadm 
+First we have to upgrade kubeadm 
+apt-get upgrade -y kubeadm=1.12.0-00
+then using the following command we can upgrade the cluster 
+kubeadm upgrade apply v1.12.0
+then check the nodes version using the following command still we can see the earlier version 
+kubectl get nodes
+To reflect latest version we need to upgrade kubelet to latest version using the following command 
+apt-get upgrade -y kubelet=1.12.0-00 
+systemctl restart kubelet 
+Now check the "kubectl get nodes", we can see the master version will be at 1.12.0 
+
+
+
+
+To Upgrade Worker Nodes 
+Strategy-1 -> Down all the nodes and create new nodes with new verions which the pplication will be down during the complete upgrade 
+Strategy-2 -> We use Drain/Cordon/uncordon on 1 node so that we can upgrade the nodes 1 after the other 
+  kubectl drain nodename 
+  apt-get upgrade -y kubeadm=1.12.0-00
+  apt-get upgrade -y kubelet=1.12.0-00
+  kubeadm upgrade node config --kubelet-version v1.12.0
+  systemctl restart kubelet 
+  kubectl uncordon nodename 
+Strategy-3 -> We create nodes with newer versions and slowly delete the nodes so that all the nodes were on latest version  
+
+Backup and Restore 
+
+Backups can be taken in 2 ways 
+Resource Configuration 
+  This Backup will covers all the definition files so that we can create the complete K8s infra asap using the definition files 
+  We can get the definitions using the following command 
+   kubectl get all --all-namespaces -o yaml > all-deploy-services.yaml 
+
+ETCD Backup and Restore 
+  
+  ETCD by default stores all its information at --data-dir value which is at ExecStart of etcd.service 
+  We need to take a snapshot of the file and then create the netries from that snapshot to the desire k8s cluster 
+
+  Taking snapshot 
+     ETCDCTL_API etcdctl snapshot save snapshot.db 
+  Check the snapshot 
+    ls 
+  check snapshot status 
+    ETCDCTL_API etcdctl snapshot status snapshot.db
+  Stop the kube-apiserver 
+    service kube-apiserver stop 
+  now change the path of --data-dir path in etcd.service  and initial cluster token 
+    --data-dir=/var/lib/etcd-from-Backup
+  restart daemon-reload  and etcd  service 
+    systemctl daemon-relaod 
+    service etcd restart         
+  start kube-apiserver  
+    service kube-apiserver start 
+That's it ETCD backup and Restore got completed.
+
+Usecase : - Some companies don't give permissions to get in touch with etcd hence use resource configuration Approach
+
+Need the following info by hand before we create snapshot 
+endpoints , cacert, cert, key information    
+
+
+
+
