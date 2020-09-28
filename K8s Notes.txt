@@ -595,6 +595,20 @@ Strategy-2 -> We use Drain/Cordon/uncordon on 1 node so that we can upgrade the 
   kubectl uncordon nodename 
 Strategy-3 -> We create nodes with newer versions and slowly delete the nodes so that all the nodes were on latest version  
 
+
+Q. Upgrade the master/controlplane components to exact version v1.18.0
+Suggestion:-
+Upgrade kubeadm tool (if not already), then the master components, and finally the kubelet. Practice referring to the kubernetes documentation page. Note: While upgrading kubelet, if you hit dependency issue while running the apt-get upgrade kubelet command, use the apt install kubelet=1.18.0-00 command instead
+Solution:-
+Run the command apt install kubeadm=1.18.0-00 and then kubeadm upgrade apply v1.18.0 and then apt install kubelet=1.18.0-00 to upgrade the kubelet on the master node
+
+Upgrade Worker nodes Process
+Run the command kubectl drain node01 --ignore-daemonsets
+Q. Upgrade the worker node to the exact version v1.18.0
+Solution:- 
+Run the commands: apt install kubeadm=1.18.0-00 and then kubeadm upgrade node. Finally, run apt install kubelet=1.18.0-00.
+
+
 Backup and Restore 
 
 Backups can be taken in 2 ways 
@@ -604,7 +618,17 @@ Resource Configuration
    kubectl get all --all-namespaces -o yaml > all-deploy-services.yaml 
 
 ETCD Backup and Restore 
-  
+
+To get the Version of ETCD 
+Refer this Page for Quik Overview of Commands ETCDCTL 
+https://github.com/mmumshad/kubernetes-the-hard-way/blob/master/practice-questions-answers/cluster-maintenance/backup-etcd/etcd-backup-and-restore.md
+
+Look at the ETCD Logs using command kubectl logs etcd-master -n kube-system or check the ETCD pod kubectl describe pod etcd-master -n kube-system
+
+master $ kubectl logs etcd-master -n kube-system
+
+2020-09-27 08:28:18.684576 I | etcdmain: etcd Version: 3.4.3
+
   ETCD by default stores all its information at --data-dir value which is at ExecStart of etcd.service 
   We need to take a snapshot of the file and then create the netries from that snapshot to the desire k8s cluster 
 
@@ -624,6 +648,24 @@ ETCD Backup and Restore
   start kube-apiserver  
     service kube-apiserver start 
 That's it ETCD backup and Restore got completed.
+
+Q. Store the backup file at location /tmp/snapshot-pre-boot.db
+Solution. 
+ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /tmp/snapshot-pre-boot.db
+
+Q. Restore from snapshot
+Solution.
+Restore ETCD Snapshot to a new folder
+ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+     --name=master \
+     --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+     --data-dir /var/lib/etcd-from-backup \
+     --initial-cluster=master=https://127.0.0.1:2380 \
+     --initial-cluster-token=etcd-cluster-1 \
+     --initial-advertise-peer-urls=https://127.0.0.1:2380 \
+     snapshot restore /tmp/snapshot-pre-boot.db
+
+
 
 Usecase : - Some companies don't give permissions to get in touch with etcd hence use resource configuration Approach
 
