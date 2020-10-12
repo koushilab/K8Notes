@@ -672,6 +672,23 @@ Usecase : - Some companies don't give permissions to get in touch with etcd henc
 Need the following info by hand before we create snapshot 
 endpoints , cacert, cert, key information    
 
+SECURITY
+
+TLS Basics 
+
+We use 2 types of ecryption 
+Symmetric - uses key/value pair over the network, if a hacker is in between can easily evesdrop the data and read the cred as the KEy/alue will be transimitted over network
+Asymmetric - uses PRivate Key/ Publick KEy concept for any communication in between, 
+
+Client System :- 
+ Generates Private /Public key and transfers Public key to the server and  uses peivate key for any communication 
+
+Server Manages :-
+  Server generates datta will be enrypted and shared to the Client system whenever requested however the hackers creates the same websit to unleash the private key from the client 
+  Hence Certificate comes in place, Whenenver server is created it creates a CSR with Certificate Autohritiy , So that the cert will be geniune and the client browser will be maintaining publick key of CA 
+  to ensure that the server authorized signature is from CA or hacker, Hence the issue will be resolved for any authentication.
+
+
 
 
 
